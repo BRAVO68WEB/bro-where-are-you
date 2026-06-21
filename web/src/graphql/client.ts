@@ -1,7 +1,10 @@
 import { createClient, Client } from 'graphql-ws';
 
 const HASURA_URL = import.meta.env.VITE_HASURA_URL || 'http://localhost:8080/v1/graphql';
-const HASURA_WS_URL = HASURA_URL.replace(/^http/, 'ws');
+const normalizedUrl = HASURA_URL.endsWith('/v1/graphql')
+  ? HASURA_URL
+  : HASURA_URL.replace(/\/+$/, '') + '/v1/graphql';
+const HASURA_WS_URL = normalizedUrl.replace(/^http/, 'ws');
 
 let client: Client | null = null;
 let tokenGetter: (() => string | null) | null = null;
