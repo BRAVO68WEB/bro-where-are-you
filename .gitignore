@@ -26,3 +26,4 @@ pubspec.lock
 .DS_Store
 india-latest.osm.pbf
 *.osm.pbf
+./server/server

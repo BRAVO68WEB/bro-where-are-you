@@ -2,9 +2,10 @@
 
 # Proto codegen (run from server/ directory)
 proto:
-	cd server && protoc --go_out=. --go_opt=module=bwhere \
+	cd server && protoc --proto_path=../proto \
+		--go_out=. --go_opt=module=bwhere \
 		--go-grpc_out=. --go-grpc_opt=module=bwhere \
-		../proto/location/v1/location.proto
+		location/v1/location.proto
 
 # Go server
 server:
