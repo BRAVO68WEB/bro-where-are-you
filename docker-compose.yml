@@ -98,7 +98,7 @@ services:
 
   valhalla:
     profiles: ["valhalla"]
-    image: ghcr.io/gis-ops/valhalla:latest
+    image: ghcr.io/nilsnolde/docker-valhalla/valhalla:latest
     container_name: valhalla
     restart: unless-stopped
     ports:
