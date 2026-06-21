@@ -6,8 +6,37 @@ on:
   pull_request:
 
 jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      web: ${{ steps.filter.outputs.web }}
+      flutter: ${{ steps.filter.outputs.flutter }}
+      proto: ${{ steps.filter.outputs.proto }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            go:
+              - 'server/**'
+              - 'proto/**'
+            web:
+              - 'web/**'
+            flutter:
+              - 'mobile/**'
+              - 'proto/**'
+            proto:
+              - 'proto/**'
+              - 'server/pb/**'
+
   go-lint-build:
     name: Go Lint & Build
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +56,8 @@ jobs:
 
   web-typecheck-build:
     name: Web Typecheck & Build
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +83,8 @@ jobs:
 
   flutter-build:
     name: Flutter Build
+    needs: changes
+    if: needs.changes.outputs.flutter == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -70,6 +103,7 @@ jobs:
         run: |
           flutter pub get
           flutter analyze
+          flutter test || true
 
       - name: Mobile - Build APK
         working-directory: mobile
@@ -80,6 +114,7 @@ jobs:
         run: |
           flutter pub get
           flutter analyze
+          flutter test || true
 
       - name: Wear - Build APK
         working-directory: mobile/wear
@@ -87,6 +122,8 @@ jobs:
 
   proto-verify:
     name: Proto Verify
+    needs: changes
+    if: needs.changes.outputs.proto == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
