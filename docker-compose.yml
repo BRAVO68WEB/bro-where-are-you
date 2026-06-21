@@ -52,17 +52,18 @@ services:
       VALHALLA_URL: ${VALHALLA_URL:-}
     labels:
       - traefik.enable=true
-      # HTTP API (port 8088)
-      - traefik.http.routers.bwhere-api.rule=Host(`api.${DOMAIN:-localhost}`)
-      - traefik.http.routers.bwhere-api.entrypoints=websecure
-      - traefik.http.routers.bwhere-api.tls.certresolver=letsencrypt
-      - traefik.http.services.bwhere-api.loadbalancer.server.port=8088
-      # gRPC (port 50051)
-      - traefik.http.routers.bwhere-grpc.rule=Host(`grpc.${DOMAIN:-localhost}`)
-      - traefik.http.routers.bwhere-grpc.entrypoints=websecure
-      - traefik.http.routers.bwhere-grpc.tls.certresolver=letsencrypt
-      - traefik.http.services.bwhere-grpc.loadbalancer.server.port=50051
-      - traefik.http.services.bwhere-grpc.loadbalancer.server.scheme=h2c
+      # gRPC (port 50051) — h2c passthrough, manual labels matching Dokploy convention
+      - traefik.http.routers.${DOKPLOY_PREFIX}-grpc-web.rule=Host(`grpc.${DOMAIN:-localhost}`)
+      - traefik.http.routers.${DOKPLOY_PREFIX}-grpc-web.entrypoints=web
+      - traefik.http.routers.${DOKPLOY_PREFIX}-grpc-web.middlewares=redirect-to-https@file
+      - traefik.http.routers.${DOKPLOY_PREFIX}-grpc-web.service=${DOKPLOY_PREFIX}-grpc-web
+      - traefik.http.services.${DOKPLOY_PREFIX}-grpc-web.loadbalancer.server.port=50051
+      - traefik.http.routers.${DOKPLOY_PREFIX}-grpc-websecure.rule=Host(`grpc.${DOMAIN:-localhost}`)
+      - traefik.http.routers.${DOKPLOY_PREFIX}-grpc-websecure.entrypoints=websecure
+      - traefik.http.routers.${DOKPLOY_PREFIX}-grpc-websecure.service=${DOKPLOY_PREFIX}-grpc-websecure
+      - traefik.http.services.${DOKPLOY_PREFIX}-grpc-websecure.loadbalancer.server.port=50051
+      - traefik.http.services.${DOKPLOY_PREFIX}-grpc-websecure.loadbalancer.server.scheme=h2c
+      - traefik.http.routers.${DOKPLOY_PREFIX}-grpc-websecure.tls.certresolver=letsencrypt
     depends_on:
       postgres:
         condition: service_healthy
