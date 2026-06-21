@@ -1,17 +1,43 @@
-# Bro Where Are You (bwhere)
+# 🛰️ Bro Where Are You (bwhere)
 
 A self-hosted location tracking and journey recording platform. Track your daily commutes, replay routes on a map, view heatmaps of your movement, and get push notifications for journey events.
 
+## Architecture
+
+```mermaid
+graph LR
+    Flutter["📱 Flutter App"] -->|gRPC :50051| Go["⚡ Go Server"]
+    React["🌐 React SPA"] -->|GraphQL :8080| Hasura[" Hasura"]
+    Go -->|SQL| PG[("🐘 PostgreSQL\n+ PostGIS")]
+    Hasura -->|SQL| PG
+    Go -->|HTTP :8088| React
+    Flutter -->|"Device Code Auth"| Go
+
+    style Go fill:#00ADD8,color:#fff
+    style PG fill:#336791,color:#fff
+    style Hasura fill:#1C44B6,color:#fff
+    style Flutter fill:#02569B,color:#fff
+    style React fill:#61DAFB,color:#000
 ```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   Flutter    │────▶│  Go Server   │────▶│  PostgreSQL  │
-│  Mobile App  │gRPC │  gRPC + HTTP │     │  + PostGIS   │
-└──────────────┘     └──────┬───────┘     └──────┬───────┘
-                            │                     │
-┌──────────────┐     ┌──────▼───────┐     ┌──────▼───────┐
-│  React SPA   │────▶│   Hasura     │────▶│  PostgreSQL  │
-│  (Vite)      │ GQL │  GraphQL     │     │  (shared)    │
-└──────────────┘     └──────────────┘     └──────────────┘
+
+### Data Flow
+
+```mermaid
+sequenceDiagram
+    participant M as 📱 Mobile
+    participant G as ⚡ Go Server
+    participant B as 📦 Batch Inserter
+    participant DB as 🐘 PostgreSQL
+    participant H as  Hasura
+    participant W as 🌐 Web App
+
+    M->>G: StreamLocations (gRPC stream)
+    G->>B: Buffer points
+    B->>DB: Batch INSERT (every 5s)
+    B->>G: Geofence check callback
+    G-->>M: Push notification (enter/exit)
+    DB->>H: Event trigger
+    H->>W: GraphQL subscription (live updates)
 ```
 
 ## Features
@@ -42,7 +68,7 @@ A self-hosted location tracking and journey recording platform. Track your daily
 | Auth | OIDC (web) + Device Code Flow (mobile) |
 | Routing (optional) | Valhalla snap-to-road |
 
-## Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
 
@@ -170,7 +196,7 @@ make server
 make run
 ```
 
-## Mobile App (Flutter)
+## 📱 Mobile App (Flutter)
 
 ### Prerequisites
 
@@ -202,30 +228,15 @@ flutter run
 Corrects GPS drift by snapping recorded points to the road network.
 
 ```bash
-# 1. Download OSM data for your region
-mkdir -p valhalla
-wget https://download.geofabrik.de/your-region-latest.osm.pbf -O valhalla/region.osm.pbf
+# Enable in .env
+LOAD_VALHALLA=true
+VALHALLA_URL=http://valhalla:8002
 
-# 2. Add to docker-compose.yml (see docker-compose.valhalla.yml for reference)
-# 3. Set VALHALLA_URL=http://valhalla:8002 in .env
-# 4. Restart
-docker compose up -d
+# Start with Valhalla profile
+docker compose --profile valhalla up -d
 ```
 
-See `docker-compose.valhalla.yml` for the full service definition.
-
-### Cloudflare Tunnel
-
-Expose your local services to the internet securely.
-
-1. Install [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/)
-2. Copy `cloudflared/config.yml` and update the tunnel UUID and hostnames
-3. Place `credentials.json` in the `cloudflared/` directory
-4. Run alongside docker compose:
-
-```bash
-docker run --network=host -v ./cloudflared:/etc/cloudflared cloudflare/cloudflared tunnel run
-```
+Or use the Makefile shortcut: `make valhalla-up`
 
 ## API Overview
 
@@ -269,9 +280,9 @@ Hasura auto-generates a GraphQL API over the Postgres schema with real-time subs
 .
 ├── docker-compose.yml          # Production services
 ├── docker-compose.override.yml # Dev overrides (auto-loaded)
-├── docker-compose.valhalla.yml # Optional routing service
 ├── .env.example                # Environment template
 ├── Makefile                    # Build automation
+├── scripts/                    # Helper scripts (Valhalla downloader)
 ├── proto/                      # Protobuf definitions
 ├── server/                     # Go backend (gRPC + HTTP)
 │   ├── cmd/server/             # Entry point
@@ -289,9 +300,11 @@ Hasura auto-generates a GraphQL API over the Postgres schema with real-time subs
 ├── mobile/                     # Flutter Android app
 │   ├── lib/                    # Dart source
 │   └── wear/                   # WearOS companion
-└── hasura/                # Hasura metadata + config
+└── hasura/                     # Hasura metadata + config
 ```
 
-## License
+## 📄 License
 
-MIT
+The project is licensed under the [MIT License](LICENSE).
+
+_Made with ❤️ by [Bravo68web](https://github.com/Bravo68web)._
