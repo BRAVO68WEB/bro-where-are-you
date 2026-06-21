@@ -16,5 +16,5 @@ fi
 
 echo "[valhalla-downloader] Downloading OSM data from $OSM_URL ..."
 mkdir -p /data
-wget -c --show-progress -O "$DEST" "$OSM_URL"
+wget -c -O "$DEST" "$OSM_URL"
 echo "[valhalla-downloader] Download complete: $(du -h "$DEST" | cut -f1)"
