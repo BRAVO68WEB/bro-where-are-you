@@ -56,15 +56,17 @@ class _AuthScreenState extends State<AuthScreen> {
     });
 
     try {
-      // Health check via HTTP
-      final uri = Uri.parse('http://$host:$port/health');
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
-      final request = await client.getUrl(uri);
-      final response = await request.close();
-      client.close();
+      // Health check via HTTP (skip for gRPC-only port 443)
+      if (port != 443) {
+        final uri = Uri.parse('http://$host:$port/health');
+        final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+        final request = await client.getUrl(uri);
+        final response = await request.close();
+        client.close();
 
-      if (response.statusCode != 200) {
-        throw Exception('Server returned ${response.statusCode}');
+        if (response.statusCode != 200) {
+          throw Exception('Server returned ${response.statusCode}');
+        }
       }
 
       // Save server config
@@ -231,7 +233,7 @@ class _AuthScreenState extends State<AuthScreen> {
         controller: _portController,
         decoration: const InputDecoration(
           labelText: 'Port',
-          hintText: '50051',
+          hintText: '443 for HTTPS, 50051 for local',
           border: OutlineInputBorder(),
           prefixIcon: Icon(Icons.numbers),
         ),

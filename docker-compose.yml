@@ -52,7 +52,18 @@ services:
       VALHALLA_URL: ${VALHALLA_URL:-}
     labels:
       - traefik.enable=true
-      # gRPC (port 50051) — h2c passthrough, manual labels matching Dokploy convention
+      # HTTP API (port 8088)
+      - traefik.http.routers.${DOKPLOY_PREFIX}-api-web.rule=Host(`api.${DOMAIN:-localhost}`)
+      - traefik.http.routers.${DOKPLOY_PREFIX}-api-web.entrypoints=web
+      - traefik.http.routers.${DOKPLOY_PREFIX}-api-web.middlewares=redirect-to-https@file
+      - traefik.http.routers.${DOKPLOY_PREFIX}-api-web.service=${DOKPLOY_PREFIX}-api-web
+      - traefik.http.services.${DOKPLOY_PREFIX}-api-web.loadbalancer.server.port=8088
+      - traefik.http.routers.${DOKPLOY_PREFIX}-api-websecure.rule=Host(`api.${DOMAIN:-localhost}`)
+      - traefik.http.routers.${DOKPLOY_PREFIX}-api-websecure.entrypoints=websecure
+      - traefik.http.routers.${DOKPLOY_PREFIX}-api-websecure.service=${DOKPLOY_PREFIX}-api-websecure
+      - traefik.http.services.${DOKPLOY_PREFIX}-api-websecure.loadbalancer.server.port=8088
+      - traefik.http.routers.${DOKPLOY_PREFIX}-api-websecure.tls.certresolver=letsencrypt
+      # gRPC (port 50051) — h2c passthrough
       - traefik.http.routers.${DOKPLOY_PREFIX}-grpc-web.rule=Host(`grpc.${DOMAIN:-localhost}`)
       - traefik.http.routers.${DOKPLOY_PREFIX}-grpc-web.entrypoints=web
       - traefik.http.routers.${DOKPLOY_PREFIX}-grpc-web.middlewares=redirect-to-https@file

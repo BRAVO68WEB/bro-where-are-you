@@ -34,11 +34,14 @@ class GrpcService {
     _jwtToken = prefs.getString('jwt_token') ?? '';
     _deviceId = prefs.getString('device_id') ?? 'phone-default';
 
+    final useTls = _port == 443;
     _channel = ClientChannel(
       _host,
       port: _port,
       options: ChannelOptions(
-        credentials: ChannelCredentials.insecure(),
+        credentials: useTls
+            ? ChannelCredentials.secure()
+            : ChannelCredentials.insecure(),
         keepAlive: ClientKeepAliveOptions(
           pingInterval: Duration(seconds: 20),
           timeout: Duration(seconds: 10),
