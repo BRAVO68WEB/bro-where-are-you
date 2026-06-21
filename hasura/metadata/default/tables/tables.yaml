@@ -1,0 +1,74 @@
+- table:
+    name: journeys
+    schema: public
+  select_permissions:
+    - role: user
+      permission:
+        columns:
+          - id
+          - device_id
+          - label
+          - started_at
+          - ended_at
+          - total_distance_m
+          - source
+          - transport_mode
+          - start_place
+          - end_place
+        filter: {}
+  event_triggers:
+    - name: on_journey_changed
+      definition:
+        enable_manual: false
+        insert:
+          columns: "*"
+        update:
+          columns: ["ended_at"]
+      webhook: http://go-server:8088/api/webhooks/hasura
+      headers:
+        - name: x-hasura-webhook-secret
+          value_from_env: HASURA_WEBHOOK_SECRET
+      retry_conf:
+        num_retries: 3
+        interval_sec: 10
+        timeout_sec: 60
+
+- table:
+    name: location_points
+    schema: public
+  select_permissions:
+    - role: user
+      permission:
+        columns:
+          - journey_id
+          - device_id
+          - geog
+          - accuracy
+          - speed
+          - altitude
+          - heading
+          - source
+          - recorded_at
+        filter: {}
+
+- table:
+    name: devices
+    schema: public
+  select_permissions:
+    - role: user
+      permission:
+        columns:
+          - id
+          - name
+          - platform
+          - last_seen
+          - active
+        filter: {}
+
+- table:
+    name: saved_locations
+    schema: public
+
+- table:
+    name: share_links
+    schema: public

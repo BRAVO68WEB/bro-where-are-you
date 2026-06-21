@@ -1,0 +1,33 @@
+name: bwhere
+description: Track your daily commute and journey
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.7.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_map: ^8.3.0
+  latlong2: ^0.9.1
+  grpc: ^5.1.0
+  protobuf: ^6.0.0
+  flutter_background_geolocation: ^5.2.1
+  geolocator: ^14.0.3
+  permission_handler: ^11.3.0
+  intl: ^0.20.2
+  shared_preferences: ^2.3.4
+  flutter_local_notifications: ^22.0.1
+  fl_chart: ^1.2.0
+  battery_plus: ^7.0.0
+  sqflite: ^2.4.3
+  path: ^1.9.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true

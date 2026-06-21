@@ -1,0 +1,267 @@
+syntax = "proto3";
+package location.v1;
+
+option go_package = "bwhere/pb/location/v1;locationv1";
+
+// ============================================================
+// Location Service
+// ============================================================
+
+service LocationService {
+  // Location streaming
+  rpc StreamLocations (stream LocationUpdate) returns (LocationAck);
+
+  // Journey lifecycle
+  rpc StartJourney (StartJourneyRequest) returns (Journey);
+  rpc EndJourney (EndJourneyRequest) returns (Journey);
+  rpc GetJourneys (GetJourneysRequest) returns (GetJourneysResponse);
+  rpc GetJourneyPoints (GetJourneyPointsRequest) returns (GetJourneyPointsResponse);
+
+  // Auth — Device Code flow
+  rpc RequestDeviceCode (DeviceCodeRequest) returns (DeviceCodeResponse);
+  rpc PollDeviceActivation (PollActivationRequest) returns (DeviceActivationResponse);
+
+  // Journey stats
+  rpc GetJourneyStats (GetJourneyStatsRequest) returns (JourneyStats);
+
+  // Saved Locations
+  rpc SaveLocation (SaveLocationRequest) returns (SavedLocation);
+  rpc GetSavedLocations (GetSavedLocationsRequest) returns (GetSavedLocationsResponse);
+  rpc DeleteSavedLocation (DeleteSavedLocationRequest) returns (Empty);
+
+  // Share Links
+  rpc CreateShareLink (CreateShareLinkRequest) returns (ShareLink);
+  rpc GetShareLink (GetShareLinkRequest) returns (ShareLink);
+
+  // Export
+  rpc ExportJourney (ExportRequest) returns (ExportResponse);
+
+  // Devices
+  rpc GetDevices (GetDevicesRequest) returns (GetDevicesResponse);
+}
+
+// ============================================================
+// Location Messages
+// ============================================================
+
+message LocationUpdate {
+  string device_id = 1;
+  string journey_id = 2;
+  double latitude = 3;
+  double longitude = 4;
+  float  accuracy = 5;
+  float  speed = 6;
+  float  altitude = 7;
+  float  heading = 8;
+  int64  timestamp_ms = 9;
+  string source = 10;
+  float  heart_rate = 11;
+  string transport_mode = 12;
+}
+
+message LocationAck {
+  int32  points_received = 1;
+  string journey_id = 2;
+}
+
+message LocationPoint {
+  double latitude = 1;
+  double longitude = 2;
+  float  accuracy = 3;
+  float  speed = 4;
+  float  altitude = 5;
+  float  heading = 6;
+  int64  recorded_at = 7;
+}
+
+// ============================================================
+// Journey Messages
+// ============================================================
+
+message StartJourneyRequest {
+  string device_id = 1;
+  string label = 2;
+}
+
+message EndJourneyRequest {
+  string journey_id = 1;
+}
+
+message Journey {
+  string id = 1;
+  string device_id = 2;
+  string label = 3;
+  int64  started_at = 4;
+  int64  ended_at = 5;
+  double total_distance_m = 6;
+  int32  point_count = 7;
+  string transport_mode = 8;
+  string start_place = 9;
+  string end_place = 10;
+}
+
+message GetJourneysRequest {
+  string device_id = 1;
+  int32  limit = 2;
+  int32  offset = 3;
+}
+
+message GetJourneysResponse {
+  repeated Journey journeys = 1;
+  int32 total = 2;
+}
+
+message GetJourneyPointsRequest {
+  string journey_id = 1;
+}
+
+message GetJourneyPointsResponse {
+  repeated LocationPoint points = 1;
+}
+
+// ============================================================
+// Auth — Device Code Flow
+// ============================================================
+
+message DeviceCodeRequest {
+  string device_name = 1;  // "Pixel 8 Pro" or "Galaxy Watch 6"
+  string platform = 2;     // "android" | "wearos"
+}
+
+message DeviceCodeResponse {
+  string device_code = 1;  // 5-char alphanumeric e.g. "A3K9M"
+  int64  expires_at = 2;   // code expires in 10 minutes
+  int32  interval = 3;     // poll interval in seconds
+}
+
+message PollActivationRequest {
+  string device_code = 1;
+}
+
+message DeviceActivationResponse {
+  bool   activated = 1;
+  string device_token = 2;  // JWT — empty if not yet activated
+  string device_id = 3;     // assigned UUID
+  string device_name = 4;
+}
+
+// ============================================================
+// Journey Stats
+// ============================================================
+
+message GetJourneyStatsRequest {
+  string device_id = 1;
+  string period = 2;        // "day" | "week" | "month"
+  int32  limit = 3;         // number of periods
+}
+
+message JourneyStats {
+  string device_id = 1;
+  int32  total_journeys = 2;
+  double total_distance_m = 3;
+  int64  total_duration_ms = 4;
+  double avg_speed = 5;
+  double max_speed = 6;
+  double avg_distance_per_journey = 7;
+  repeated DayStats daily = 8;
+}
+
+message DayStats {
+  string date = 1;          // "2026-06-20"
+  int32  journey_count = 2;
+  double distance_m = 3;
+  int64  duration_ms = 4;
+}
+
+// ============================================================
+// Saved Locations
+// ============================================================
+
+message SaveLocationRequest {
+  string device_id = 1;
+  string name = 2;          // "Home", "Work", "Gym"
+  double latitude = 3;
+  double longitude = 4;
+  float  radius_m = 5;      // geofence radius in meters
+}
+
+message SavedLocation {
+  string id = 1;
+  string device_id = 2;
+  string name = 3;
+  double latitude = 4;
+  double longitude = 5;
+  float  radius_m = 6;
+  int64  created_at = 7;
+}
+
+message GetSavedLocationsRequest {
+  string device_id = 1;
+}
+
+message GetSavedLocationsResponse {
+  repeated SavedLocation locations = 1;
+}
+
+message DeleteSavedLocationRequest {
+  string location_id = 1;
+}
+
+// ============================================================
+// Share Links
+// ============================================================
+
+message CreateShareLinkRequest {
+  string journey_id = 1;
+  int64  duration_hours = 2; // 0 = no expiry
+}
+
+message ShareLink {
+  string id = 1;
+  string journey_id = 2;
+  string url = 3;
+  int64  expires_at = 4;
+  bool   expired = 5;
+}
+
+message GetShareLinkRequest {
+  string share_id = 1;
+}
+
+// ============================================================
+// Export
+// ============================================================
+
+message ExportRequest {
+  string journey_id = 1;
+  string format = 2;        // "gpx" | "geojson" | "csv"
+}
+
+message ExportResponse {
+  string filename = 1;
+  bytes  data = 2;
+}
+
+// ============================================================
+// Devices
+// ============================================================
+
+message Device {
+  string id = 1;
+  string name = 2;
+  string platform = 3;
+  int64  last_seen = 4;
+  bool   active = 5;
+}
+
+message GetDevicesRequest {}
+
+message GetDevicesResponse {
+  repeated Device devices = 1;
+}
+
+// ============================================================
+// Common
+// ============================================================
+
+message Empty {}

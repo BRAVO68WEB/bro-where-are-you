@@ -1,0 +1,146 @@
+package main
+
+import (
+	"context"
+	"log/slog"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c" //nolint:staticcheck // no replacement for gRPC h2c yet
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/reflection"
+
+	"bwhere/internal/api"
+	"bwhere/internal/auth"
+	"bwhere/internal/batch"
+	"bwhere/internal/db"
+	"bwhere/internal/geofence"
+	"bwhere/internal/notifications"
+	"bwhere/internal/scheduler"
+	grpcHandler "bwhere/internal/grpc"
+	pb "bwhere/pb/location/v1"
+)
+
+func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Database
+	dbURL := envOr("DB_URL", "postgres://bwhere:bwhere@localhost:5432/bwhere")
+	database, err := db.New(ctx, dbURL)
+	if err != nil {
+		slog.Error("db init failed", "err", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	// Run migrations
+	if err := db.RunMigrations(ctx, database.Pool()); err != nil {
+		slog.Error("migrations failed", "err", err)
+		os.Exit(1)
+	}
+
+	// OneSignal notifications client
+	notifClient := notifications.NewOneSignalClient()
+
+	// Geofence checker
+	geoChecker := geofence.NewChecker(database, notifClient)
+
+	// Batch inserter with geofence callback
+	inserter := batch.New(database,
+		batch.WithPointCallback(func(ctx context.Context, p db.LocationPoint) {
+			geoChecker.Check(ctx, p.DeviceID, p.Latitude, p.Longitude)
+		}),
+	)
+	inserter.Start(ctx)
+	defer inserter.Stop()
+
+	// Auth — Device Code Manager + JWT
+	jwtSecret := envOr("JWT_SECRET", "change-me-in-production")
+	authMgr := auth.NewDeviceCodeManager(database.Pool(), jwtSecret)
+
+	// Daily summary scheduler (default 8 PM)
+	sched := scheduler.New(database, notifClient, 20, 0)
+	sched.Start(ctx)
+
+	// gRPC server
+	unaryAuth, streamAuth := auth.Interceptor(authMgr)
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(unaryAuth),
+		grpc.ChainStreamInterceptor(streamAuth),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             10 * time.Second,
+			PermitWithoutStream: true,
+		}),
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			MaxConnectionIdle:     5 * time.Minute,
+			MaxConnectionAge:      10 * time.Minute,
+			MaxConnectionAgeGrace: 30 * time.Second,
+			Time:                  30 * time.Second,
+			Timeout:               10 * time.Second,
+		}),
+	)
+
+	svc := grpcHandler.New(database, inserter, authMgr)
+	pb.RegisterLocationServiceServer(grpcServer, svc)
+	reflection.Register(grpcServer)
+
+	// Gin HTTP router
+	router := api.NewRouter(database, authMgr)
+
+	// gRPC listener
+	grpcPort := envOr("GRPC_PORT", "50051")
+	grpcLis, err := net.Listen("tcp", ":"+grpcPort)
+	if err != nil {
+		slog.Error("grpc listen failed", "err", err)
+		os.Exit(1)
+	}
+
+	// HTTP listener
+	httpPort := envOr("HTTP_PORT", "8088")
+
+	// h2c handler for gRPC
+	h2s := &http2.Server{}
+	h2cHandler := h2c.NewHandler(grpcServer, h2s)
+
+	slog.Info("gRPC server starting", "port", grpcPort)
+	slog.Info("HTTP server starting", "port", httpPort)
+	slog.Info("geofence checker active")
+	slog.Info("daily summary scheduler active", "hour", 20, "minute", 0)
+
+	// Graceful shutdown
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		<-sigCh
+		slog.Info("shutting down")
+		grpcServer.GracefulStop()
+		cancel()
+	}()
+
+	// Start gRPC server
+	go func() {
+		if err := http.Serve(grpcLis, h2cHandler); err != nil {
+			slog.Error("grpc serve failed", "err", err)
+		}
+	}()
+
+	// Start HTTP server (Gin)
+	if err := router.Engine().Run(":" + httpPort); err != nil {
+		slog.Error("http serve failed", "err", err)
+		os.Exit(1)
+	}
+}
+
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}

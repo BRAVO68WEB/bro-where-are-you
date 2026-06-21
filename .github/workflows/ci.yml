@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  go-lint-build:
+    name: Go Lint & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.12.2
+          working-directory: server
+
+      - name: Build
+        working-directory: server
+        run: go build ./cmd/server
+
+  web-typecheck-build:
+    name: Web Typecheck & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        working-directory: web
+        run: pnpm exec tsc --noEmit
+
+      - name: Build
+        working-directory: web
+        run: pnpm run build
+
+  flutter-build:
+    name: Flutter Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Mobile - Analyze & Test
+        working-directory: mobile
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+
+      - name: Mobile - Build APK
+        working-directory: mobile
+        run: flutter build apk --debug
+
+      - name: Wear - Analyze & Test
+        working-directory: mobile/wear
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+
+      - name: Wear - Build APK
+        working-directory: mobile/wear
+        run: flutter build apk --debug
+
+  proto-verify:
+    name: Proto Verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install protoc plugins
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2
+
+      - name: Regenerate proto
+        run: |
+          cd server && protoc --go_out=. --go_opt=module=bwhere \
+            --go-grpc_out=. --go-grpc_opt=module=bwhere \
+            ../proto/location/v1/location.proto
+
+      - name: Check for drift
+        run: |
+          git diff --exit-code server/pb/ || \
+            (echo "::error::Generated proto files are out of date. Run 'make proto' and commit." && exit 1)

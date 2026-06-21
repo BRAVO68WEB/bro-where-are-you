@@ -1,0 +1,122 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    ports:
+      - "5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bwhere}
+      POSTGRES_USER: ${POSTGRES_USER:-bwhere}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U ${POSTGRES_USER:-bwhere}
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  hasura:
+    image: hasura/graphql-engine:v2.44.0
+    restart: unless-stopped
+    ports:
+      - "8080"
+    environment:
+      HASURA_GRAPHQL_DATABASE_URL: postgres://${POSTGRES_USER:-bwhere}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-bwhere}
+      HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_ADMIN_SECRET:?HASURA_ADMIN_SECRET is required}
+      HASURA_GRAPHQL_ENABLE_CONSOLE: "true"
+      HASURA_GRAPHQL_UNAUTHORIZED_ROLE: "anonymous"
+      HASURA_GRAPHQL_WS_READ_TIMEOUT: "30s"
+      HASURA_WEBHOOK_SECRET: ${HASURA_WEBHOOK_SECRET:?HASURA_WEBHOOK_SECRET is required}
+      HASURA_GRAPHQL_JWT_SECRET: >-
+        {"type":"RS256","jwk_url":"${OIDC_JWKS_URL:?OIDC_JWKS_URL is required}","claims_format":"json","claims_namespace":"","claims_map":{"x-hasura-allowed-roles":["user"],"x-hasura-default-role":"user","x-hasura-user-id":"sub"}}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  go-server:
+    build: ./server
+    restart: unless-stopped
+    expose:
+      - "50051"
+      - "8088"
+    environment:
+      DB_URL: postgres://${POSTGRES_USER:-bwhere}:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-bwhere}
+      API_KEY: ${API_KEY:?API_KEY is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      GRPC_PORT: "50051"
+      HTTP_PORT: "8088"
+      ONESIGNAL_APP_ID: ${ONESIGNAL_APP_ID:-}
+      ONESIGNAL_API_KEY: ${ONESIGNAL_API_KEY:-}
+      HASURA_WEBHOOK_SECRET: ${HASURA_WEBHOOK_SECRET:?HASURA_WEBHOOK_SECRET is required}
+      VALHALLA_URL: ${VALHALLA_URL:-}
+    labels:
+      - traefik.enable=true
+      # HTTP API (port 8088)
+      - traefik.http.routers.bwhere-api.rule=Host(`api.${DOMAIN:-localhost}`)
+      - traefik.http.routers.bwhere-api.entrypoints=websecure
+      - traefik.http.routers.bwhere-api.tls.certresolver=letsencrypt
+      - traefik.http.services.bwhere-api.loadbalancer.server.port=8088
+      # gRPC (port 50051)
+      - traefik.http.routers.bwhere-grpc.rule=Host(`grpc.${DOMAIN:-localhost}`)
+      - traefik.http.routers.bwhere-grpc.entrypoints=websecure
+      - traefik.http.routers.bwhere-grpc.tls.certresolver=letsencrypt
+      - traefik.http.services.bwhere-grpc.loadbalancer.server.port=50051
+      - traefik.http.services.bwhere-grpc.loadbalancer.server.scheme=h2c
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web-app:
+    build:
+      context: ./web
+      args:
+        VITE_HASURA_URL: ${VITE_HASURA_URL:-http://localhost:8080/v1/graphql}
+        VITE_HASURA_ADMIN_SECRET: ${VITE_HASURA_ADMIN_SECRET:-}
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8088}
+        VITE_OIDC_AUTHORITY: ${VITE_OIDC_AUTHORITY:?VITE_OIDC_AUTHORITY is required}
+        VITE_OIDC_CLIENT_ID: ${VITE_OIDC_CLIENT_ID:?VITE_OIDC_CLIENT_ID is required}
+        VITE_OIDC_REDIRECT_URI: ${VITE_OIDC_REDIRECT_URI:-http://localhost:3000/callback}
+        VITE_ONESIGNAL_APP_ID: ${ONESIGNAL_APP_ID:-}
+        VITE_ONESIGNAL_SAFARI_WEB_ID: ${ONESIGNAL_SAFARI_WEB_ID:-}
+    restart: unless-stopped
+    ports:
+      - "3000"
+
+  valhalla-downloader:
+    profiles: ["valhalla"]
+    image: alpine:3.20
+    container_name: valhalla-downloader
+    restart: "no"
+    volumes:
+      - ./scripts/download-valhalla.sh:/scripts/download-valhalla.sh:ro
+      - valhalla-data:/data
+    environment:
+      LOAD_VALHALLA: ${LOAD_VALHALLA:-false}
+      OSM_URL: ${OSM_URL:-https://download.geofabrik.de/asia/india-latest.osm.pbf}
+    entrypoint: ["/bin/sh", "/scripts/download-valhalla.sh"]
+
+  valhalla:
+    profiles: ["valhalla"]
+    image: ghcr.io/gis-ops/valhalla:latest
+    container_name: valhalla
+    restart: unless-stopped
+    ports:
+      - "8002"
+    volumes:
+      - valhalla-data:/data
+    environment:
+      tile_urls: ${OSM_URL:-https://download.geofabrik.de/asia/india-latest.osm.pbf}
+    depends_on:
+      valhalla-downloader:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+
+volumes:
+  pg-data:
+  valhalla-data:
