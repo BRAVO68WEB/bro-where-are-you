@@ -79,7 +79,7 @@ sequenceDiagram
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/bro-where-are-you.git
+git clone https://github.com/BRAVO68WEB/bro-where-are-you.git
 cd bro-where-are-you
 cp .env.example .env
 ```
