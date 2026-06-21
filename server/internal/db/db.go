@@ -18,17 +18,17 @@ type DB struct {
 }
 
 type Journey struct {
-	ID              string
-	DeviceID        string
-	Label           string
-	StartedAt       time.Time
-	EndedAt         *time.Time
-	TotalDistanceM  float64
-	PointCount      int32
-	Source          string
-	TransportMode   string
-	StartPlace      string
-	EndPlace        string
+	ID             string
+	DeviceID       string
+	Label          string
+	StartedAt      time.Time
+	EndedAt        *time.Time
+	TotalDistanceM float64
+	PointCount     int32
+	Source         string
+	TransportMode  string
+	StartPlace     string
+	EndPlace       string
 }
 
 type LocationPoint struct {

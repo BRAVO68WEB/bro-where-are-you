@@ -1,5 +1,3 @@
-import 'package:protobuf/protobuf.dart';
-
 class Journey {
   final String id;
   final String deviceId;

@@ -37,13 +37,13 @@ func ReverseGeocode(lat, lng float64) (string, error) {
 	var result struct {
 		DisplayName string `json:"display_name"`
 		Address     struct {
-			Road        string `json:"road"`
-			Suburb      string `json:"suburb"`
-			City        string `json:"city"`
-			Town        string `json:"town"`
-			Village     string `json:"village"`
-			State       string `json:"state"`
-			Country     string `json:"country"`
+			Road          string `json:"road"`
+			Suburb        string `json:"suburb"`
+			City          string `json:"city"`
+			Town          string `json:"town"`
+			Village       string `json:"village"`
+			State         string `json:"state"`
+			Country       string `json:"country"`
 			Neighbourhood string `json:"neighbourhood"`
 		} `json:"address"`
 	}

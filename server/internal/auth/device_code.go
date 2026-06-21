@@ -13,10 +13,10 @@ import (
 )
 
 const (
-	codeLength    = 5
-	codeChars     = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // no I/O/0/1 for readability
-	codeExpiry    = 10 * time.Minute
-	pollInterval  = 5 // seconds
+	codeLength   = 5
+	codeChars    = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // no I/O/0/1 for readability
+	codeExpiry   = 10 * time.Minute
+	pollInterval = 5 // seconds
 )
 
 type DeviceCodeManager struct {
@@ -33,10 +33,10 @@ type DeviceCode struct {
 }
 
 type DeviceActivation struct {
-	Activated  bool
+	Activated   bool
 	DeviceToken string
-	DeviceID   string
-	DeviceName string
+	DeviceID    string
+	DeviceName  string
 }
 
 func NewDeviceCodeManager(pool *pgxpool.Pool, jwtSecret string) *DeviceCodeManager {

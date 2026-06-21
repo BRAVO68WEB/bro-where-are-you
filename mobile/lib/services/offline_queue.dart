@@ -3,8 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 import 'grpc_service.dart';
-import '../generated/location/v1/location.pb.dart';
-import 'package:fixnum/fixnum.dart';
 
 class PendingPoint {
   final int? id;

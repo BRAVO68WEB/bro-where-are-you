@@ -84,15 +84,15 @@ func (c *ValhallaClient) TraceRoute(ctx context.Context, points []Point, costing
 	var result struct {
 		Trip struct {
 			Legs []struct {
-				Shape       string `json:"shape"`
-				Maneuvers   []struct {
+				Shape     string `json:"shape"`
+				Maneuvers []struct {
 					BeginShapeIndex int `json:"begin_shape_index"`
 					EndShapeIndex   int `json:"end_shape_index"`
 				} `json:"maneuvers"`
 			} `json:"legs"`
 			Summary struct {
-				Length   float64 `json:"length"`
-				Time     float64 `json:"time"`
+				Length float64 `json:"length"`
+				Time   float64 `json:"time"`
 			} `json:"summary"`
 		} `json:"trip"`
 		MatchedPoints []struct {

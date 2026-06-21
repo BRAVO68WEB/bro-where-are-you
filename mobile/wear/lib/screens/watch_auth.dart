@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:grpc/grpc.dart';
-import '../generated/location/v1/location.pb.dart';
 import '../generated/location/v1/location.pbgrpc.dart';
 
 enum _AuthStep { serverUrl, connecting, deviceCode, done }
@@ -266,7 +265,7 @@ class _WatchAuthScreenState extends State<WatchAuthScreen> {
               ),
               const SizedBox(height: 2),
               Text(
-                '${m}:${s.toString().padLeft(2, '0')}',
+                '$m:${s.toString().padLeft(2, '0')}',
                 style: TextStyle(
                   fontSize: 10,
                   color: _expiresInSeconds < 60 ? Colors.red : Colors.white38,

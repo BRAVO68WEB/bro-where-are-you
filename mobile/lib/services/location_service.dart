@@ -97,6 +97,7 @@ class LocationService extends ChangeNotifier {
 
   // Adaptive GPS state
   _GpsProfile _currentProfile = _GpsProfile.walking;
+  // ignore: unused_field — reserved for adaptive GPS stationary detection
   int _consecutiveStationary = 0;
   double _minDistance = 5; // configurable via settings
   int _batteryLevel = 100;
@@ -271,7 +272,7 @@ class LocationService extends ChangeNotifier {
 
     try {
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
 
       final newPos = LatLng(position.latitude, position.longitude);

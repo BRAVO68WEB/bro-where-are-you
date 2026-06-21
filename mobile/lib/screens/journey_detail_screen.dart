@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../services/grpc_service.dart';
-import '../generated/location/v1/location.pb.dart';
 import '../widgets/speed_chart.dart';
 import '../widgets/elevation_chart.dart';
 

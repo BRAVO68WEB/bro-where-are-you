@@ -187,7 +187,7 @@ class _AddLocationScreenState extends State<AddLocationScreen> {
   Future<void> _getCurrentLocation() async {
     try {
       final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
       );
       setState(() {
         _currentPos = LatLng(pos.latitude, pos.longitude);

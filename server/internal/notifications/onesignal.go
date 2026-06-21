@@ -65,13 +65,13 @@ func (c *OneSignalClient) SendToAll(ctx context.Context, heading, body string, d
 		slog.Error("fetch players failed, falling back to segment", "err", err)
 		// Fallback to segment
 		return c.send(ctx, NotificationRequest{
-			AppID:         c.appID,
-			TargetChannel: "push",
-			Headings:      map[string]string{"en": heading},
-			Contents:      map[string]string{"en": body},
+			AppID:            c.appID,
+			TargetChannel:    "push",
+			Headings:         map[string]string{"en": heading},
+			Contents:         map[string]string{"en": body},
 			IncludedSegments: []string{"All"},
-			Data:          data,
-			Priority:      10,
+			Data:             data,
+			Priority:         10,
 		})
 	}
 	if len(playerIDs) == 0 {

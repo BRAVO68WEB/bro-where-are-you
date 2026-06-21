@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../services/grpc_service.dart';
 import '../services/location_service.dart';
 
 class SettingsScreen extends StatefulWidget {

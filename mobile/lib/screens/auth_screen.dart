@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/grpc_service.dart';
-import '../generated/location/v1/location.pb.dart';
 
 enum AuthStep { serverUrl, connecting, deviceCode, polling, done }
 
@@ -152,7 +151,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Future<String> _getDeviceName() async {
     try {
-      final info = await Platform.version;
+      final info = Platform.version;
       return info.length > 30 ? '${info.substring(0, 30)}...' : info;
     } catch (_) {
       return 'Flutter Device';
@@ -310,7 +309,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     letterSpacing: 8,
                     fontFamily: 'monospace')),
             const SizedBox(height: 8),
-            Text('Expires in ${minutes}:${seconds.toString().padLeft(2, '0')}',
+            Text('Expires in $minutes:${seconds.toString().padLeft(2, '0')}',
                 style: TextStyle(
                     color: _expiresInSeconds < 60 ? Colors.red : Colors.grey)),
           ],

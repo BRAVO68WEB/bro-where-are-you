@@ -253,12 +253,12 @@ func (r *Router) handleJourneyEvent(c *gin.Context, event HasuraEvent) {
 			heading := "Journey Complete"
 			body := fmt.Sprintf("Your %q journey ended. %.0fm recorded.", label, distance)
 
-		go func() {
-			result, err := r.notif.SendToAll(context.Background(), heading, body, map[string]string{
-				"type":       "journey_completed",
-				"journey_id": journeyID,
-				"device_id":  deviceID,
-			})
+			go func() {
+				result, err := r.notif.SendToAll(context.Background(), heading, body, map[string]string{
+					"type":       "journey_completed",
+					"journey_id": journeyID,
+					"device_id":  deviceID,
+				})
 				if err != nil {
 					slog.Error("notification failed", "err", err)
 				} else {

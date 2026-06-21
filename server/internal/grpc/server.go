@@ -15,9 +15,9 @@ import (
 
 type Server struct {
 	pb.UnimplementedLocationServiceServer
-	db      *db.DB
+	db       *db.DB
 	inserter *batch.Inserter
-	auth    *auth.DeviceCodeManager
+	auth     *auth.DeviceCodeManager
 }
 
 func New(database *db.DB, inserter *batch.Inserter, authMgr *auth.DeviceCodeManager) *Server {

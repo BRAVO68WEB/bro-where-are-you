@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:grpc/grpc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../generated/location/v1/location.pb.dart';
 import '../generated/location/v1/location.pbgrpc.dart';
 import 'package:fixnum/fixnum.dart';
 
@@ -149,7 +147,7 @@ class _WatchHomeScreenState extends State<WatchHomeScreen> {
 
     try {
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
 
       final newPos = LatLng(position.latitude, position.longitude);

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -11,7 +12,7 @@ import (
 	"time"
 
 	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c" //nolint:staticcheck // no replacement for gRPC h2c yet
+	"golang.org/x/net/http2/h2c" //nolint:staticcheck // no h2c replacement yet
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
@@ -21,13 +22,20 @@ import (
 	"bwhere/internal/batch"
 	"bwhere/internal/db"
 	"bwhere/internal/geofence"
+	grpcHandler "bwhere/internal/grpc"
 	"bwhere/internal/notifications"
 	"bwhere/internal/scheduler"
-	grpcHandler "bwhere/internal/grpc"
 	pb "bwhere/pb/location/v1"
 )
 
 func main() {
+	if err := run(); err != nil {
+		slog.Error("startup failed", "err", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -35,15 +43,13 @@ func main() {
 	dbURL := envOr("DB_URL", "postgres://bwhere:bwhere@localhost:5432/bwhere")
 	database, err := db.New(ctx, dbURL)
 	if err != nil {
-		slog.Error("db init failed", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("db init: %w", err)
 	}
 	defer database.Close()
 
 	// Run migrations
 	if err := db.RunMigrations(ctx, database.Pool()); err != nil {
-		slog.Error("migrations failed", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("migrations: %w", err)
 	}
 
 	// OneSignal notifications client
@@ -98,8 +104,7 @@ func main() {
 	grpcPort := envOr("GRPC_PORT", "50051")
 	grpcLis, err := net.Listen("tcp", ":"+grpcPort)
 	if err != nil {
-		slog.Error("grpc listen failed", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("grpc listen: %w", err)
 	}
 
 	// HTTP listener
@@ -107,7 +112,7 @@ func main() {
 
 	// h2c handler for gRPC
 	h2s := &http2.Server{}
-	h2cHandler := h2c.NewHandler(grpcServer, h2s)
+	h2cHandler := h2c.NewHandler(grpcServer, h2s) //nolint:staticcheck // no replacement for gRPC h2c yet
 
 	slog.Info("gRPC server starting", "port", grpcPort)
 	slog.Info("HTTP server starting", "port", httpPort)
@@ -133,9 +138,9 @@ func main() {
 
 	// Start HTTP server (Gin)
 	if err := router.Engine().Run(":" + httpPort); err != nil {
-		slog.Error("http serve failed", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("http serve: %w", err)
 	}
+	return nil
 }
 
 func envOr(key, fallback string) string {

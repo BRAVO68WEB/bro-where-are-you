@@ -5,7 +5,6 @@ import 'package:grpc/grpc.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../generated/location/v1/location.pb.dart';
 import '../generated/location/v1/location.pbgrpc.dart';
 
 class GrpcService {
