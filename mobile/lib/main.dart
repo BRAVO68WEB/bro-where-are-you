@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
@@ -7,6 +8,14 @@ import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Request critical permissions upfront
+  await [
+    Permission.location,
+    Permission.locationAlways,
+    Permission.notification,
+  ].request();
+
   await NotificationService.init();
   runApp(const BWhereApp());
 }

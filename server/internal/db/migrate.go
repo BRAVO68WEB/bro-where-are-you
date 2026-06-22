@@ -80,6 +80,14 @@ CREATE TABLE IF NOT EXISTS saved_locations (
     created_at  TIMESTAMPTZ DEFAULT now()
 );
 
+-- Saved Locations View (lat/lng extracted from geography)
+CREATE OR REPLACE VIEW saved_locations_view AS
+SELECT id, device_id, name,
+       ST_Y(geog::geometry) AS latitude,
+       ST_X(geog::geometry) AS longitude,
+       radius_m, created_at
+FROM saved_locations;
+
 -- Share Links
 CREATE TABLE IF NOT EXISTS share_links (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),

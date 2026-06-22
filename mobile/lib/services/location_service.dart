@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_background_geolocation/flutter_background_geolocation.dart' as bg;
 import 'package:latlong2/latlong.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:battery_plus/battery_plus.dart';
 import 'grpc_service.dart';
 import 'notification_service.dart';
@@ -22,54 +22,13 @@ class _GpsProfile {
     required this.name,
   });
 
-  // Stationary: not moving
-  static const stationary = _GpsProfile(
-    intervalMs: 15000,
-    distanceFilter: 30,
-    name: 'stationary',
-  );
-
-  // Walking: 1-6 km/h
-  static const walking = _GpsProfile(
-    intervalMs: 5000,
-    distanceFilter: 10,
-    name: 'walking',
-  );
-
-  // Running/Cycling: 6-25 km/h
-  static const running = _GpsProfile(
-    intervalMs: 3000,
-    distanceFilter: 8,
-    name: 'running',
-  );
-
-  // City driving: 25-60 km/h
-  static const cityDriving = _GpsProfile(
-    intervalMs: 2000,
-    distanceFilter: 15,
-    name: 'city_driving',
-  );
-
-  // Highway: 60+ km/h
-  static const highway = _GpsProfile(
-    intervalMs: 5000,
-    distanceFilter: 50,
-    name: 'highway',
-  );
-
-  // Low battery mode
-  static const lowBattery = _GpsProfile(
-    intervalMs: 10000,
-    distanceFilter: 30,
-    name: 'low_battery',
-  );
-
-  // Critical battery mode
-  static const criticalBattery = _GpsProfile(
-    intervalMs: 30000,
-    distanceFilter: 100,
-    name: 'critical_battery',
-  );
+  static const stationary = _GpsProfile(intervalMs: 15000, distanceFilter: 30, name: 'stationary');
+  static const walking = _GpsProfile(intervalMs: 5000, distanceFilter: 10, name: 'walking');
+  static const running = _GpsProfile(intervalMs: 3000, distanceFilter: 8, name: 'running');
+  static const cityDriving = _GpsProfile(intervalMs: 2000, distanceFilter: 15, name: 'city_driving');
+  static const highway = _GpsProfile(intervalMs: 5000, distanceFilter: 50, name: 'highway');
+  static const lowBattery = _GpsProfile(intervalMs: 10000, distanceFilter: 30, name: 'low_battery');
+  static const criticalBattery = _GpsProfile(intervalMs: 30000, distanceFilter: 100, name: 'critical_battery');
 
   static _GpsProfile fromSpeed(double speedMps) {
     final speedKmh = speedMps * 3.6;
@@ -90,7 +49,6 @@ class LocationService extends ChangeNotifier {
   String? _activeJourneyId;
   String _deviceId = 'phone-default';
   final List<LatLng> _routePoints = [];
-  Timer? _locationTimer;
   final GrpcService _grpc = GrpcService();
   final Battery _battery = Battery();
   final OfflineQueue _offlineQueue = OfflineQueue();
@@ -99,7 +57,7 @@ class LocationService extends ChangeNotifier {
   _GpsProfile _currentProfile = _GpsProfile.walking;
   // ignore: unused_field — reserved for adaptive GPS stationary detection
   int _consecutiveStationary = 0;
-  double _minDistance = 5; // configurable via settings
+  double _minDistance = 5;
   int _batteryLevel = 100;
   bool _batteryMonitoring = false;
 
@@ -137,21 +95,10 @@ class LocationService extends ChangeNotifier {
     if (_state == TrackingState.tracking) return;
     _deviceId = deviceId;
 
-    // Check permissions
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        throw Exception('Location permission denied');
-      }
-    }
-    if (permission == LocationPermission.deniedForever) {
-      throw Exception('Location permission permanently denied');
-    }
-
     // Start battery monitoring
     _startBatteryMonitoring();
 
+    // Start journey on server
     try {
       final journey = await _grpc.startJourney(deviceId, label);
       _activeJourneyId = journey.id;
@@ -174,25 +121,43 @@ class LocationService extends ChangeNotifier {
     // Start offline queue sync worker
     _offlineQueue.startSync(_grpc);
 
-    // Show tracking notification
-    await NotificationService.showTrackingNotification(
-      speed: speedText,
-      distance: distanceText,
-      points: _pointCount,
-    );
+    // Configure and start background geolocation
+    await bg.BackgroundGeolocation.ready(bg.Config(
+      desiredAccuracy: bg.Config.DESIRED_ACCURACY_HIGH,
+      distanceFilter: _minDistance,
+      foregroundService: true,
+      locationUpdateInterval: _currentProfile.intervalMs,
+      fastestLocationUpdateInterval: 1000,
+      allowIdenticalLocations: false,
+      batchSync: false,
+      autoSync: true,
+      debug: false,
+      logLevel: bg.Config.LOG_LEVEL_WARNING,
+      app: bg.AppConfig(
+        stopOnTerminate: false,
+        startOnBoot: true,
+        enableHeadless: true,
+        notification: bg.Notification(
+          title: 'BWhere',
+          text: 'Tracking your journey',
+        ),
+      ),
+    ));
 
-    // Start adaptive location timer
-    _startAdaptiveTimer();
+    // Listen to location events
+    bg.BackgroundGeolocation.onLocation(_onBgLocation, _onBgLocationError);
 
-    // Get immediate position
-    await _captureLocation();
+    // Listen to motion changes for adaptive profiles
+    bg.BackgroundGeolocation.onMotionChange(_onMotionChange);
+
+    await bg.BackgroundGeolocation.start();
+    debugPrint('[Location] Background geolocation started');
   }
 
   Future<void> stopTracking() async {
     if (_state == TrackingState.idle) return;
 
-    _locationTimer?.cancel();
-    _locationTimer = null;
+    await bg.BackgroundGeolocation.stop();
     _stopBatteryMonitoring();
     _offlineQueue.stopSync();
 
@@ -213,35 +178,107 @@ class LocationService extends ChangeNotifier {
     await NotificationService.hideTrackingNotification();
   }
 
-  void _startAdaptiveTimer() {
-    _locationTimer?.cancel();
-    final interval = Duration(milliseconds: _currentProfile.intervalMs);
-    debugPrint('[Location] GPS profile: ${_currentProfile.name} (${_currentProfile.intervalMs}ms)');
-    _locationTimer = Timer.periodic(interval, (_) => _captureLocation());
+  void _onBgLocation(bg.Location location) {
+    _processLocation(
+      location.coords.latitude,
+      location.coords.longitude,
+      location.coords.speed,
+      location.coords.accuracy,
+      location.coords.altitude,
+      location.coords.heading,
+    );
+  }
+
+  void _onBgLocationError(dynamic error) {
+    debugPrint('[Location] bg location error: $error');
+  }
+
+  void _onMotionChange(bg.Location location) {
+    debugPrint('[Location] Motion change: isMoving=${location.isMoving}');
+  }
+
+  void _processLocation(double lat, double lng, double speed, double accuracy, double? altitude, double? heading) {
+    if (_state != TrackingState.tracking) return;
+
+    final newPos = LatLng(lat, lng);
+
+    // GPS jump rejection
+    if (_currentPosition != null) {
+      final distance = const Distance().as(LengthUnit.Meter, _currentPosition!, newPos);
+      final maxReasonableDistance = max(200.0 / 3.6, speed) * (_currentProfile.intervalMs / 1000) * 1.5;
+      if (distance > maxReasonableDistance && distance > 500) {
+        debugPrint('[Location] GPS jump rejected: ${distance.toStringAsFixed(0)}m');
+        return;
+      }
+      if (distance < _minDistance) return;
+      _totalDistance += distance;
+    }
+
+    // Detect stationary state
+    if (speed < 0.5) {
+      _consecutiveStationary++;
+    } else {
+      _consecutiveStationary = 0;
+    }
+
+    _currentPosition = newPos;
+    _currentSpeed = speed;
+    _routePoints.add(newPos);
+    _pointCount++;
+    notifyListeners();
+
+    // Adjust GPS profile based on speed and battery
+    _adjustGpsProfile(speed);
+
+    // Send to server
+    if (_activeJourneyId != null) {
+      _offlineQueue.enqueue(
+        journeyId: _activeJourneyId!,
+        deviceId: _deviceId,
+        latitude: lat,
+        longitude: lng,
+        speed: speed,
+        accuracy: accuracy,
+        altitude: altitude ?? 0,
+        heading: heading ?? 0,
+      );
+
+      _grpc.sendLocationUpdate(
+        journeyId: _activeJourneyId!,
+        deviceId: _deviceId,
+        latitude: lat,
+        longitude: lng,
+        speed: speed,
+        accuracy: accuracy,
+        altitude: altitude ?? 0,
+        heading: heading ?? 0,
+      );
+    }
+
+    debugPrint('[Location] $lat, $lng speed=${speed.toStringAsFixed(1)} '
+        'profile=${_currentProfile.name} battery=$_batteryLevel%');
   }
 
   void _adjustGpsProfile(double speedMps) {
-    // Battery override
+    _GpsProfile newProfile;
+
     if (_batteryLevel <= 10) {
-      if (_currentProfile.name != 'critical_battery') {
-        _currentProfile = _GpsProfile.criticalBattery;
-        _startAdaptiveTimer();
-      }
-      return;
-    }
-    if (_batteryLevel <= 20) {
-      if (_currentProfile.name != 'low_battery') {
-        _currentProfile = _GpsProfile.lowBattery;
-        _startAdaptiveTimer();
-      }
-      return;
+      newProfile = _GpsProfile.criticalBattery;
+    } else if (_batteryLevel <= 20) {
+      newProfile = _GpsProfile.lowBattery;
+    } else {
+      newProfile = _GpsProfile.fromSpeed(speedMps);
     }
 
-    // Speed-based profile
-    final newProfile = _GpsProfile.fromSpeed(speedMps);
     if (newProfile.name != _currentProfile.name) {
       _currentProfile = newProfile;
-      _startAdaptiveTimer();
+      debugPrint('[Location] GPS profile: ${_currentProfile.name} (${_currentProfile.intervalMs}ms)');
+
+      // Update bg config with new interval
+      bg.BackgroundGeolocation.setConfig(bg.Config(
+        locationUpdateInterval: _currentProfile.intervalMs,
+        distanceFilter: _currentProfile.distanceFilter,
+      ));
     }
   }
 
@@ -249,12 +286,10 @@ class LocationService extends ChangeNotifier {
     if (_batteryMonitoring) return;
     _batteryMonitoring = true;
 
-    // Initial battery level
     _battery.batteryLevel.then((level) {
       _batteryLevel = level;
     });
 
-    // Listen for battery changes
     _battery.onBatteryStateChanged.listen((BatteryState state) {
       _battery.batteryLevel.then((level) {
         _batteryLevel = level;
@@ -267,102 +302,9 @@ class LocationService extends ChangeNotifier {
     _batteryMonitoring = false;
   }
 
-  Future<void> _captureLocation() async {
-    if (_state != TrackingState.tracking) return;
-
-    try {
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-      );
-
-      final newPos = LatLng(position.latitude, position.longitude);
-      final speed = position.speed;
-
-      // GPS jump rejection: reject if moved impossibly fast
-      if (_currentPosition != null) {
-        final distance = const Distance().as(
-          LengthUnit.Meter,
-          _currentPosition!,
-          newPos,
-        );
-
-        // Sanity check: at 200 km/h max, in our interval, max distance = speed * time
-        final maxReasonableDistance = max(200.0 / 3.6, speed) *
-            (_currentProfile.intervalMs / 1000) * 1.5;
-        if (distance > maxReasonableDistance && distance > 500) {
-          debugPrint('[Location] GPS jump rejected: ${distance.toStringAsFixed(0)}m '
-              '(max: ${maxReasonableDistance.toStringAsFixed(0)}m)');
-          return;
-        }
-
-        // Minimum distance filter
-        if (distance < _minDistance) return;
-
-        _totalDistance += distance;
-      }
-
-      // Detect stationary state
-      if (speed < 0.5) {
-        _consecutiveStationary++;
-      } else {
-        _consecutiveStationary = 0;
-      }
-
-      _currentPosition = newPos;
-      _currentSpeed = speed;
-      _routePoints.add(newPos);
-      _pointCount++;
-      notifyListeners();
-
-      // Adjust GPS profile based on speed and battery
-      _adjustGpsProfile(speed);
-
-      // Update notification
-      await NotificationService.updateTrackingNotification(
-        speed: speedText,
-        distance: distanceText,
-        points: _pointCount,
-      );
-
-      // Send to server — write to offline queue first, then gRPC
-      if (_activeJourneyId != null) {
-        // Always write to offline queue first
-        await _offlineQueue.enqueue(
-          journeyId: _activeJourneyId!,
-          deviceId: _deviceId,
-          latitude: position.latitude,
-          longitude: position.longitude,
-          speed: speed,
-          accuracy: position.accuracy,
-          altitude: position.altitude,
-          heading: position.heading,
-        );
-
-        // Also send via gRPC stream (if connected)
-        _grpc.sendLocationUpdate(
-          journeyId: _activeJourneyId!,
-          deviceId: _deviceId,
-          latitude: position.latitude,
-          longitude: position.longitude,
-          speed: speed,
-          accuracy: position.accuracy,
-          altitude: position.altitude,
-          heading: position.heading,
-        );
-      }
-
-      debugPrint('[Location] ${position.latitude}, ${position.longitude} '
-          'speed=${speed.toStringAsFixed(1)} '
-          'profile=${_currentProfile.name} '
-          'battery=$_batteryLevel%');
-    } catch (e) {
-      debugPrint('[Location] capture error: $e');
-    }
-  }
-
   @override
   void dispose() {
-    _locationTimer?.cancel();
+    bg.BackgroundGeolocation.stop();
     _stopBatteryMonitoring();
     NotificationService.hideTrackingNotification();
     _grpc.close();

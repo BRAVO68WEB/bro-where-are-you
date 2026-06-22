@@ -68,7 +68,43 @@
 - table:
     name: saved_locations
     schema: public
+  select_permissions:
+    - role: user
+      permission:
+        columns:
+          - id
+          - device_id
+          - name
+          - radius_m
+          - created_at
+        filter: {}
+
+- table:
+    name: saved_locations_view
+    schema: public
+  select_permissions:
+    - role: user
+      permission:
+        columns:
+          - id
+          - device_id
+          - name
+          - latitude
+          - longitude
+          - radius_m
+          - created_at
+        filter: {}
 
 - table:
     name: share_links
     schema: public
+  select_permissions:
+    - role: user
+      permission:
+        columns:
+          - id
+          - journey_id
+          - device_id
+          - expires_at
+          - created_at
+        filter: {}

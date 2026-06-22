@@ -50,6 +50,8 @@ services:
       ONESIGNAL_API_KEY: ${ONESIGNAL_API_KEY:-}
       HASURA_WEBHOOK_SECRET: ${HASURA_WEBHOOK_SECRET:?HASURA_WEBHOOK_SECRET is required}
       VALHALLA_URL: ${VALHALLA_URL:-}
+      HASURA_URL: http://hasura:8080
+      HASURA_ADMIN_SECRET: ${HASURA_ADMIN_SECRET:?HASURA_ADMIN_SECRET is required}
     labels:
       - traefik.enable=true
       # HTTP API (port 8088)

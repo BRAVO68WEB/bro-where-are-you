@@ -23,6 +23,7 @@ import (
 	"bwhere/internal/db"
 	"bwhere/internal/geofence"
 	grpcHandler "bwhere/internal/grpc"
+	hasuraPkg "bwhere/internal/hasura"
 	"bwhere/internal/notifications"
 	"bwhere/internal/scheduler"
 	pb "bwhere/pb/location/v1"
@@ -50,6 +51,30 @@ func run() error {
 	// Run migrations
 	if err := db.RunMigrations(ctx, database.Pool()); err != nil {
 		return fmt.Errorf("migrations: %w", err)
+	}
+
+	// Apply Hasura metadata (permissions + event triggers)
+	hasuraURL := envOr("HASURA_URL", "http://hasura:8080")
+	hasuraSecret := envOr("HASURA_ADMIN_SECRET", "")
+	if hasuraSecret != "" {
+		go func() {
+			// Retry loop — Hasura may not be ready immediately
+			for i := 0; i < 10; i++ {
+				time.Sleep(3 * time.Second)
+				applier := hasuraPkg.NewMetadataApplier(hasuraURL, hasuraSecret)
+				if err := applier.TrackView(); err == nil {
+					if err := applier.ApplyPermissions(); err != nil {
+						slog.Warn("hasura permissions apply failed", "err", err)
+					}
+					if err := applier.ApplyEventTriggers(); err != nil {
+						slog.Warn("hasura event triggers apply failed", "err", err)
+					}
+					slog.Info("hasura metadata applied")
+					return
+				}
+			}
+			slog.Warn("hasura metadata apply skipped — hasura not reachable")
+		}()
 	}
 
 	// OneSignal notifications client
