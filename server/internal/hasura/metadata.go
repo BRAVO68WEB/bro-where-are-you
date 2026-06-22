@@ -62,12 +62,7 @@ func (m *MetadataApplier) TrackView() error {
 			"table":  map[string]string{"name": "saved_locations_view", "schema": "public"},
 		},
 	}
-	err := m.post(payload)
-	if err != nil {
-		// already-tracked is not an error
-		fmt.Printf("[hasura] track saved_locations_view: %v\n", err)
-	}
-	return nil
+	return m.post(payload)
 }
 
 func (m *MetadataApplier) createSelectPermission(table string, columns []string) error {
@@ -126,8 +121,20 @@ func (m *MetadataApplier) post(payload any) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("status %d", resp.StatusCode)
+	if resp.StatusCode == http.StatusOK {
+		return nil
 	}
-	return nil
+
+	// Read response to check for "already-exists" (not a real error)
+	var result struct {
+		Error string `json:"error"`
+		Code  string `json:"code"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if result.Code == "already-exists" || result.Code == "already-tracked" {
+		return nil // idempotent — already applied
+	}
+
+	return fmt.Errorf("status %d: %s", resp.StatusCode, result.Error)
 }
